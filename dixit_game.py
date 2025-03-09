@@ -14,8 +14,6 @@ import hashlib
 
 openai.api_key = mykey  # OpenAI API key
 
-### kontrolni soucet = checksum md5
-
 logging.basicConfig(filename='dixit.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s',
                     filemode='w')  # 'w' mode or 'a' mode
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -141,7 +139,7 @@ class Player(AbstractPlayer):
         self.score += number
 
 
-manager = CardManager("pokus.json", r"C:\Users\filip\Documents\Skola\matprac\obrazky")
+manager = CardManager("images.json", "card_images")
 
 
 class DixitGame:
@@ -583,5 +581,5 @@ if __name__ == "__main__":
     jmena_hracu = ["Petr", "Jana", "Josef", "Pavel"]
     povahy_hracu = ["odpovídáš jako voják", "odpovídáš jako tří leté dítě", "mluvíš pozpátku",
                     "si slovák, odpovídej slovensky"]
-    game = DixitGame(jmena_hracu, povahy_hracu, root, debug=False)
+    game = DixitGame(jmena_hracu, povahy_hracu, root, debug=True)
     root.mainloop()
