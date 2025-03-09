@@ -34,6 +34,3 @@ def process_images_to_json(input_picture_directory: str, output_json_file: str) 
     json_data:str = json.dumps([picture.model_dump() for picture in pictures], ensure_ascii=False, indent=4) #pydantic
     with open(output_json_file, "w", encoding="utf-8") as f:
         f.write(json_data)
-
-# Example usage
-process_images_to_json(r"C:\Users\filip\Documents\Skola\matprac\obrazky", "obrazky.json")
