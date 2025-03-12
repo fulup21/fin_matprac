@@ -1,5 +1,4 @@
 from abc import abstractmethod, ABC
-
 from pydantic import BaseModel
 
 
@@ -11,8 +10,32 @@ class Card(BaseModel):
     encoded_picture: str
 
 
+class AbstractCardManager(ABC):
+    """An object, which keeps track of all the cards
+    by default loads all images and makes Card instances out of them
+    """
+
+    @abstractmethod
+    def __init__(self, json_file: str, input_directory: str) -> None:
+        self.dict_of_cards: dict[int, Card] = {}
+        self.json_file = json_file
+        self.input_directory = input_directory
+        self.load_cards()
+        ...
+
+    @abstractmethod
+    def load_cards(self) -> None:
+        """Loads all the cards from the json file into dict"""
+        ...
+
+    @abstractmethod
+    def find_card(self, key: int) -> Card:
+        """find a card by key"""
+        ...
+
+
 class AbstractPlayer(ABC):
-    """Players"""
+    """Player"""
 
     @abstractmethod
     def __init__(self, name: str, nature: str | None, temperature: float | None) -> None:
