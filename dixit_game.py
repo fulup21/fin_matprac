@@ -1,5 +1,6 @@
-from random import shuffle
-from abstracts import AbstractPlayer, Card
+from random import shuffle, choice
+import os
+from abstracts import AbstractCardManager, AbstractPlayer, Card
 from import_images import process_images_to_json
 from sk import mykey
 import openai
@@ -20,9 +21,9 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 log = logging.getLogger("dixit")
 
 
-class CardManager:
+class CardManager(AbstractCardManager):
     """An object, which keeps track of all the cards
-    defaultly loads all images and makes Card instances out of them
+    by default loads all images and makes Card instances out of them
     """
 
     def __init__(self, json_file: str, input_directory: str) -> None:
@@ -40,18 +41,30 @@ class CardManager:
             if not isinstance(data, list) or not all(
                     'key' in item and 'path' in item and 'checksum' in item and 'encoded_picture' in item for item in
                     data):
-                raise ValueError("JSON content is invalid")
-            # Verify checksums
+                raise ValueError("obsah JSONu je chybný")
+
+            # Check if the number of items in the JSON file matches the number of files in the directory
+            num_files_in_directory = len([name for name in os.listdir(self.input_directory) if os.path.isfile(os.path.join(self.input_directory, name))])
+            if len(data) != num_files_in_directory:
+                raise ValueError(f"Počet obrázků nesedí. V JSONu ({len(data)}) a ve složce ({num_files_in_directory}).")
+
+            # Verify checksums and file existence
             for item in data:
-                decoded_data = base64.b64decode(item['encoded_picture'].encode('utf-8'))
-                calculated_checksum = hashlib.md5(decoded_data).hexdigest()
+                if not os.path.exists(item['path']):
+                    raise FileNotFoundError(f"Soubor '{item['path']}' neexistuje!")
+
+                with open(item['path'], "rb") as _f:
+                    b64_image: bytes = base64.b64encode(_f.read())
+                    calculated_checksum = hashlib.md5(b64_image).hexdigest()
+
                 if calculated_checksum != item['checksum']:
-                    raise ValueError(f"Checksum verification failed for card with key {item['key']}")
+                    raise ValueError(f"Checksum verifikace selhala u karty s klíčem {item['key']}")
 
             self.dict_of_cards = {item['key']: Card(**item) for item in data}
             log.info(f"Karty byly uspesne nacteny z '{self.json_file}'.")
+
         except (FileNotFoundError, json.JSONDecodeError, ValueError) as e:
-            log.info(f"Error with JSON file '{self.json_file}': {e}. Regenerating...")
+            log.info(f"Chyba se souborem '{self.json_file}': {e}. Regeneruji...")
             process_images_to_json(self.input_directory, self.json_file)
             self.load_cards()  # Retry loading after regeneration
 
@@ -79,7 +92,7 @@ class Player(AbstractPlayer):
 
     def make_description(self, card: Card) -> str:
         prompt = """Na základě zadaného obrázku vytvoř pojem 
-        vystihující atmosféru a koncept obrázku, vyhni se přímému popisu detailů. 
+        vystihující atmosféru a koncept obrázku, vyhni se přímému popisu. 
         Tvým cílem je, aby podle popisu neuhodli všichi, ale zároveň alespoň jeden hráč.
         Pojem nesmí být delší než 30 znaků.
         Vypiš mi pouze tento pojem a to ve formátu:'pojem'"""
@@ -113,7 +126,7 @@ class Player(AbstractPlayer):
     def choose_card(self, description: str, laid_out_cards: list[Card]) -> Card:
         """look at all cards 'on the table' and compare them with the description"""
 
-        prompt = f"Na základě zadaných obrázků vyber ten, který nejlép sedí zadanému popisu:{description}. Napiš mi pouze číslo karty ve formatu:1"
+        prompt = f"Na základě zadaných obrázků vyber ten, který nejlépe sedí zadanému popisu:{description}. Napiš mi pouze číslo karty ve formatu:1"
         built_message = [{
             "type": "text",
             "text": prompt,
@@ -231,7 +244,7 @@ class DixitGame:
             self.cards_on_table.append((storyteller_card, storyteller))
             for player in self.players:
                 if player != storyteller:
-                    chosen_card = player.cards_on_hand[0]
+                    chosen_card = choice(player.cards_on_hand)
                     logging.info(
                         f"Hrac {player.name} vybral k popisu {description} kartu: {chosen_card.key} a vylozil ji na stul")
                     self.cards_on_table.append((chosen_card, player))
@@ -242,12 +255,13 @@ class DixitGame:
             voting: list[tuple[Player, Card]] = []
             for player in self.players:
                 if player != storyteller:
-                    chosen_card = self.cards_on_table[0][0]
+                    list_without_players_card = [card for card in self.cards_on_table if card[1] != player]
+                    chosen_card = choice(list_without_players_card)[0]
                     logging.info(f"Hrac {player.name} hlasoval pro kartu: {chosen_card.key}")
                     voting.append((player, chosen_card))
 
-            for player in self.players:
-                player.score_add(2)
+            self.calculate_scores(voting, storyteller, storyteller_card)
+
         else:
             # Normal game flow with threads
             threads: list[threading.Thread] = []
@@ -509,7 +523,7 @@ class DixitGame:
         text_frame = tk.Frame(log_frame)
         text_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
 
-        log_text = tk.Text(text_frame, wrap=tk.NONE) 
+        log_text = tk.Text(text_frame, wrap=tk.NONE)
         scrollbar_y = tk.Scrollbar(text_frame, orient=tk.VERTICAL, command=log_text.yview)
         scrollbar_x = tk.Scrollbar(text_frame, orient=tk.HORIZONTAL, command=log_text.xview)
 
@@ -526,12 +540,12 @@ class DixitGame:
 
         # Load and display log content
         try:
-            with open('dixit.log', 'r') as log_file:
+            with open('dixit.log', 'r', encoding='utf-8') as log_file:
                 log_content = log_file.read()
                 log_text.insert('1.0', log_content)
                 log_text.config(state='disabled')  # Make text read-only
         except Exception as e:
-            log_text.insert('1.0', f"Error reading log file: {str(e)}")
+            log_text.insert('1.0', f"Problém při načítaní obsahu z logu: {str(e)}")
             log_text.config(state='disabled')
 
         # Add close button in its own frame at the bottom with more padding
@@ -563,6 +577,6 @@ if __name__ == "__main__":
     p1 = Player("Petr","učitelka mateřské školky",1)
     p2 = Player("Jana","dítě ve školce",0.2)
     p3 = Player("Josef","učitel fyziky", 0.5)
-    p4 = Player("Pavel","kočka", 0.4)
+    p4 = Player("Pavel","LeBron James", 0.4)
     game = DixitGame([p1,p2,p3,p4], root, debug=False)
     root.mainloop()
