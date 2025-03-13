@@ -523,7 +523,7 @@ class DixitGame:
         text_frame = tk.Frame(log_frame)
         text_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
 
-        log_text = tk.Text(text_frame, wrap=tk.NONE)
+        log_text = tk.Text(text_frame, wrap=tk.NONE, font=('Arial', 10, 'bold'))
         scrollbar_y = tk.Scrollbar(text_frame, orient=tk.VERTICAL, command=log_text.yview)
         scrollbar_x = tk.Scrollbar(text_frame, orient=tk.HORIZONTAL, command=log_text.xview)
 
@@ -540,7 +540,7 @@ class DixitGame:
 
         # Load and display log content
         try:
-            with open('dixit.log', 'r', encoding='utf-8') as log_file:
+            with open('dixit.log', 'r', encoding='unicode_escape') as log_file:
                 log_content = log_file.read()
                 log_text.insert('1.0', log_content)
                 log_text.config(state='disabled')  # Make text read-only
